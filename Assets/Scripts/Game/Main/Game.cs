@@ -7,7 +7,7 @@ using UnityEngine.Experimental.Rendering.HDPipeline;
 using System;
 using System.Globalization;
 using UnityEngine.Rendering.PostProcessing;
-//using SQP;
+using SQP;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -204,6 +204,7 @@ public class Game : MonoBehaviour
     public Camera bootCamera;
     
     public LevelManager levelManager;
+    public SQPClient sqpClient;
 
     public static double frameTime;
 
@@ -212,7 +213,7 @@ public class Game : MonoBehaviour
         return game.m_isHeadless;
     }
 
-    public static SoundSystem SoundSystem
+    public static ISoundSystem SoundSystem
     {
         get { return game.m_SoundSystem; }
     }
@@ -277,10 +278,6 @@ public class Game : MonoBehaviour
         m_Clock = new System.Diagnostics.Stopwatch();
         m_Clock.Start();
 
-#if UNITY_EDITOR
-        StateHistory.Initialize();       
-#endif
-        
         var buildInfo = FindObjectOfType<BuildInfo>();
         if (buildInfo != null)
             _buildId = buildInfo.buildId;
@@ -349,6 +346,15 @@ public class Game : MonoBehaviour
 
         ConfigVar.Init();
 
+        // Support -port and -query_port as per Multiplay standard
+        var serverPort = ArgumentForOption(commandLineArgs, "-port");
+        if (serverPort != null)
+            Console.EnqueueCommandNoHistory("server.port " + serverPort);
+
+        var sqpPort = ArgumentForOption(commandLineArgs, "-query_port");
+        if (sqpPort != null)
+            Console.EnqueueCommandNoHistory("server.sqp_port " + sqpPort);
+
         Console.EnqueueCommandNoHistory("exec -s " + k_UserConfigFilename);
 
         // Default is to allow no frame cap, i.e. as fast as possible if vsync is disabled
@@ -375,8 +381,12 @@ public class Game : MonoBehaviour
             Console.EnqueueCommandNoHistory("exec -s " + k_BootConfigFilename);
         }
 
-        var forceClientSystem = commandLineArgs.Contains("-forceclientsystems");
-        if (!m_isHeadless || forceClientSystem)
+
+        if(m_isHeadless)
+        {
+            m_SoundSystem = new SoundSystemNull();
+        }
+        else
         {
             m_SoundSystem = new SoundSystem();
             m_SoundSystem.Init(audioMixer);
@@ -387,9 +397,9 @@ public class Game : MonoBehaviour
             clientFrontend = go.GetComponentInChildren<ClientFrontend>();
         }
 
-        //m_SQPClient = new SQP.SQPClient();
+        sqpClient = new SQP.SQPClient();
 
-        GameDebug.Log("fps.sample initialized");
+        GameDebug.Log("FPS Sample initialized");
 #if UNITY_EDITOR
         GameDebug.Log("Build type: editor");
 #elif DEVELOPMENT_BUILD
@@ -418,7 +428,8 @@ public class Game : MonoBehaviour
         // Game loops
         Console.AddCommand("preview", CmdPreview, "Start preview mode");
         Console.AddCommand("serve", CmdServe, "Start server listening");
-        Console.AddCommand("client", CmdClient, "client: Enter client mode. Looking for servers");
+        Console.AddCommand("client", CmdClient, "client: Enter client mode.");
+        Console.AddCommand("thinclient", CmdThinClient, "client: Enter thin client mode.");
         Console.AddCommand("boot", CmdBoot, "Go back to boot loop");
         Console.AddCommand("connect", CmdConnect, "connect <ip>: Connect to server on ip (default: localhost)");
 
@@ -429,7 +440,6 @@ public class Game : MonoBehaviour
         Console.AddCommand("crashme", (string[] args) => { GameDebug.Assert(false); }, "Crashes the game next frame ");
         Console.AddCommand("saveconfig", CmdSaveConfig, "Save the user config variables");
         Console.AddCommand("loadconfig", CmdLoadConfig, "Load the user config variables");
-        //Console.AddCommand("sqp", CmdSQP, "Query the given server");
 
 #if UNITY_STANDALONE_WIN
         Console.AddCommand("windowpos", CmdWindowPosition, "Position of window. e.g. windowpos 100,100");
@@ -621,7 +631,7 @@ public class Game : MonoBehaviour
 
         UpdateCPUStats();
 
-        //m_SQPClient.Update();
+        sqpClient.Update();
 
         endUpdateEvent?.Invoke();
     }
@@ -785,34 +795,20 @@ public class Game : MonoBehaviour
         }
 
         ClientGameLoop clientGameLoop = GetGameLoop<ClientGameLoop>();
-        if(clientGameLoop != null) 
+        ThinClientGameLoop thinClientGameLoop = GetGameLoop<ThinClientGameLoop>();
+        if (clientGameLoop != null)
             clientGameLoop.CmdConnect(args);
+        else if (thinClientGameLoop != null)
+            thinClientGameLoop.CmdConnect(args);
         else
             GameDebug.Log("Cannot connect from current gamemode");
     }
 
-    /*
-    private void CmdSQP(string[] args)
+    void CmdThinClient(string[] args)
     {
-        if(m_SQPClient.ClientState != SQPClient.SQPClientState.Idle)
-        {
-            GameDebug.Log("SQPClient is busy");
-            return;
-        }
-        if(args.Length != 1)
-        {
-            Console.Write("Usage sqp <server>");
-            return;
-        }
-        System.Net.IPAddress addr;
-        if(!System.Net.IPAddress.TryParse(args[0], out addr))
-        {
-            Console.Write("Invalid address");
-            return;
-        }
-        m_SQPClient.StartInfoQuery(new System.Net.IPEndPoint(addr, NetworkConfig.serverSQPPort.IntValue));
+        RequestGameLoop( typeof(ThinClientGameLoop), args);
+        Console.s_PendingCommandsWaitForFrames = 1;
     }
-    */
 
     void CmdQuit(string[] args)
     {
@@ -961,12 +957,11 @@ public class Game : MonoBehaviour
 
     List<IGameLoop> m_gameLoops = new List<IGameLoop>();
     DebugOverlay m_DebugOverlay;
-    SoundSystem m_SoundSystem;
+    ISoundSystem m_SoundSystem;
 
     bool m_isHeadless;
     long m_StopwatchFrequency;
     System.Diagnostics.Stopwatch m_Clock;
 
     static int s_bMouseLockFrameNo;
-    //SQPClient m_SQPClient;
 }

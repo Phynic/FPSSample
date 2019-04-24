@@ -26,11 +26,8 @@ Unity become available in ECS-aware versions, we will migrate to them.
 
 Current status at a glance:
 ```
-Unity version: 2018.3 beta 6
+Unity version: 2018.3.8f1
 Platforms    : Windows (client and server) and Linux (server only)
-Fun          : Yes
-Finished     : No
-Useful       : We think so
 ```
 
 ## Getting the project
@@ -51,7 +48,8 @@ you most likely did not have LFS when you cloned.
 
 Once you have cloned the repository, you should install
 the version of Unity that is listed above in the prerequisites section. Make
-sure you include windows standalone support in your installation.
+sure you include windows standalone support in your installation (and Linux support
+if you want to build the Linux headless server).
 
 ## Opening the project for the first time
 
@@ -63,11 +61,9 @@ few clients to it.
 The first time you open the project you need patience! It takes a while
 to import all the assets.
 
-> __NOTE__: Due to a bug in Unity 2018.3 beta, you have to take
-the following steps right after the initial import:
-> 1. Search for `t:prefab` in the Project search field. Then click on the first prefab and shift+click on the last to select them all. Right click and select __Reimport__.
-> 2. Search for `t:model` in the Project search field. Repeat the same steps as for prefabs to reimport them all.
-> 3. __IF__ you are on a version older than beta 6, you may have had a few crashes during import. In that case you need to find `GooRocket` and `GooRifle` in project, right click and select __Reimport__. 
+> __NOTE__: Due to a bug in Unity 2018.3, you have to take the following step right after the initial import:
+> 1 Search for `Firstperson_Projection` in the Project search field. Select the 4 shaders, right click and reimport them.
+> 2 If you have script compile errors related to entities, you need to remove and re-install the entities package.
 >
 > One day soon we will remove this note and there will be cake.
 
@@ -107,6 +103,8 @@ compiled.
 
 Once you have built the bundles, hit __Build game__ in the game section.
 This builds the standalone player. Again, first time will be slow.
+
+> __NOTE__: Due to a limitation in Unity 2018.3, you have to look out for errors like this `Maximum number (256) of shader keywords exceeded, keyword <KEYWORD_NAME> will be ignored.` and similar. If you get these, you can close and open Unity and then try and build again. The errors are relatively harmless but can lead to graphical artifacts as some shaders will have wrong keywords.
 
 ### Using the quick start launcher
 
